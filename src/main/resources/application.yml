@@ -1,0 +1,5 @@
+spring:
+  application:
+    name: message_push
+server:
+  port: 8080

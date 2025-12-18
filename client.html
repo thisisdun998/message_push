@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>IM Test Client</title>
+    <style>
+        body { font-family: sans-serif; padding: 20px; }
+        .container { display: flex; gap: 20px; }
+        .box { border: 1px solid #ccc; padding: 10px; width: 300px; }
+        #log { width: 100%; height: 300px; border: 1px solid #999; overflow-y: scroll; margin-top: 10px; padding: 5px; background-color: #f9f9f9; }
+        .sent { color: blue; }
+        .received { color: green; }
+        .sys { color: #888; font-style: italic; }
+    </style>
+</head>
+<body>
+    <h2>WebSocket IM Test</h2>
+    
+    <div class="container">
+        <div class="box">
+            <h3>1. Connection</h3>
+            <label>My User ID:</label>
+            <input type="text" id="userId" value="1001">
+            <button onclick="connect()">Connect</button>
+            <button onclick="disconnect()">Disconnect</button>
+            <div id="status" style="margin-top: 10px; font-weight: bold;">Status: Disconnected</div>
+        </div>
+
+        <div class="box">
+            <h3>2. Send Message</h3>
+            <label>To User ID:</label>
+            <input type="text" id="toId" value="1002"><br><br>
+            <label>Message:</label>
+            <input type="text" id="content" value="Hello!"><br><br>
+            <button onclick="sendMessage()">Send</button>
+        </div>
+    </div>
+
+    <h3>Log</h3>
+    <div id="log"></div>
+
+    <script>
+        let ws = null;
+
+        function connect() {
+            const userId = document.getElementById('userId').value;
+            if (!userId) return alert('Please enter User ID');
+            
+            if (ws) {
+                ws.close();
+            }
+
+            const url = `ws://localhost:8080/chat/${userId}`;
+            console.log("Connecting to " + url);
+            
+            ws = new WebSocket(url);
+
+            ws.onopen = function() {
+                document.getElementById('status').innerText = 'Status: Connected';
+                document.getElementById('status').style.color = 'green';
+                log(`Connected as ${userId}`, 'sys');
+            };
+
+            ws.onmessage = function(event) {
+                console.log("Received:", event.data);
+                log(`Received: ${event.data}`, 'received');
+            };
+
+            ws.onclose = function() {
+                document.getElementById('status').innerText = 'Status: Disconnected';
+                document.getElementById('status').style.color = 'black';
+                log('Disconnected', 'sys');
+                ws = null;
+            };
+
+            ws.onerror = function(err) {
+                console.error("WebSocket Error:", err);
+                log('Error occurred', 'sys');
+            };
+        }
+
+        function disconnect() {
+            if (ws) {
+                ws.close();
+            }
+        }
+
+        function sendMessage() {
+            if (!ws || ws.readyState !== WebSocket.OPEN) {
+                return alert('Not connected');
+            }
+
+            const toId = document.getElementById('toId').value;
+            const content = document.getElementById('content').value;
+
+            if (!toId || !content) return alert('Please enter To ID and Message');
+
+            const msg = {
+                type: 'CHAT',
+                toId: toId,
+                content: content
+            };
+
+            const json = JSON.stringify(msg);
+            ws.send(json);
+            log(`Sent: ${json}`, 'sent');
+        }
+
+        function log(msg, type) {
+            const logDiv = document.getElementById('log');
+            const p = document.createElement('div');
+            p.className = type || '';
+            p.innerText = `[${new Date().toLocaleTimeString()}] ${msg}`;
+            logDiv.appendChild(p);
+            logDiv.scrollTop = logDiv.scrollHeight;
+        }
+    </script>
+</body>
+</html>

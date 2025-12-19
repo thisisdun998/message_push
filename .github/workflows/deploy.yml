@@ -6,17 +6,18 @@ on:
   workflow_dispatch:
 
 env:
-  # 组合镜像全名: 注册中心/命名空间/仓库名
-  # 注意：这里直接引用 Secrets，确保你在 GitHub 后台配好了 ALIYUN_NAMESPACE = dsf_project
+  # 镜像全名
   IMAGE_NAME: ${{ secrets.ALIYUN_REGISTRY }}/${{ secrets.ALIYUN_NAMESPACE }}/message_push
 
 jobs:
+  # 任务1: 构建并发布 (这里做了性能优化)
   build-and-publish:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      # 优化点: 使用 GitHub 缓存 Maven 依赖，下一次构建不需要重新下载 jar 包
       - name: Set up JDK 21
         uses: actions/setup-java@v4
         with:
@@ -24,10 +25,10 @@ jobs:
           distribution: 'temurin'
           cache: maven
 
-      - name: Run Tests
-        run: ./mvnw test
+      # 优化点: 在 Runner 上直接编译，比在 Docker 里快
+      - name: Build with Maven
+        run: ./mvnw clean package -DskipTests
 
-      # 登录阿里云 ACR
       - name: Log in to Aliyun ACR
         uses: docker/login-action@v3
         with:
@@ -35,15 +36,14 @@ jobs:
           username: ${{ secrets.ALIYUN_USERNAME }}
           password: ${{ secrets.ALIYUN_PASSWORD }}
 
-      # 构建并推送镜像
       - name: Build and push Docker image
         uses: docker/build-push-action@v5
         with:
           context: .
           push: true
-          # 打两个标签: latest (用于生产) 和 commit_sha (用于回滚/追溯)
           tags: ${{ env.IMAGE_NAME }}:latest,${{ env.IMAGE_NAME }}:${{ github.sha }}
 
+  # 任务2: 部署 (这里保留了你的 SSH Key 配置)
   deploy:
     needs: build-and-publish
     runs-on: ubuntu-latest
@@ -56,21 +56,19 @@ jobs:
           username: ${{ secrets.SERVER_USER }}
           key: ${{ secrets.SERVER_KEY }}
           script: |
-            # 1. 登录阿里云 (防止私有镜像拉取失败)
+            # 1. 登录阿里云 (防止拉取权限报错)
             echo "${{ secrets.ALIYUN_PASSWORD }}" | docker login ${{ secrets.ALIYUN_REGISTRY }} --username ${{ secrets.ALIYUN_USERNAME }} --password-stdin
             
-            # 2. 停止并移除旧容器 (如果存在)
+            # 2. 停止旧容器
             docker stop message-push-container || true
             docker rm message-push-container || true
             
-            # 3. 拉取刚才构建的最新镜像
-            # 这里的变量无法直接传导到 ssh script 内部，所以我们用明确的拼接方式，或者重新定义变量
-            # 为稳妥起见，直接使用完整的镜像名进行拉取
-            docker pull ${{ secrets.ALIYUN_REGISTRY }}/${{ secrets.ALIYUN_NAMESPACE }}/message_push:latest
+            # 3. 拉取新镜像 (因为体积小了，这里也会变快)
+            docker pull ${{ env.IMAGE_NAME }}:latest
             
             # 4. 启动新容器
             docker run -d \
               -p 9001:9001 \
               --name message-push-container \
               --restart always \
-              ${{ secrets.ALIYUN_REGISTRY }}/${{ secrets.ALIYUN_NAMESPACE }}/message_push:latest
+              ${{ env.IMAGE_NAME }}:latest

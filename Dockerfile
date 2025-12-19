@@ -1,5 +1,5 @@
 # 使用官方 OpenJDK 镜像作为基础镜像
-FROM openjdk:21-jdk-slim
+FROM eclipse-temurin:21-jdk
 
 # 安装 Maven
 RUN apt-get update && apt-get install -y maven

@@ -70,7 +70,7 @@ jobs:
             
             # 4. 启动新容器
             docker run -d \
-              -p 8080:8080 \
+              -p 9001:9001 \
               --name message-push-container \
               --restart always \
               ${{ secrets.ALIYUN_REGISTRY }}/${{ secrets.ALIYUN_NAMESPACE }}/message_push:latest

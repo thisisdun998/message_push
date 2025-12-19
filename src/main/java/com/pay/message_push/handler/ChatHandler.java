@@ -24,6 +24,15 @@ public class ChatHandler extends TextWebSocketHandler {
     public void afterConnectionEstablished(WebSocketSession session) throws Exception {
         String userId = (String) session.getAttributes().get("userId");
         if (userId != null) {
+            // 检查用户是否已经在线
+            if (SESSIONS.containsKey(userId)) {
+                // 用户已在线，拒绝新连接并发送提示信息
+                System.out.println("Connection rejected: User " + userId + " is already connected");
+                session.sendMessage(new TextMessage("{\"type\":\"error\",\"message\":\"User " + userId + " is already connected\"}"));
+                session.close(CloseStatus.GOING_AWAY);
+                return;
+            }
+            
             SESSIONS.put(userId, session);
             System.out.println("User connected: " + userId + ", Session ID: " + session.getId());
         } else {

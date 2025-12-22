@@ -69,11 +69,13 @@ public class ChatHandler extends TextWebSocketHandler {
                 } else {
                     SESSIONS.remove(toId);
                     System.out.println("Target user " + toId + " session is closed.");
-                    // 可选: 通知发送者目标离线
+                    // 通知发送者目标离线
+                    notifySenderOffline(session, toId);
                 }
             } else {
                 System.out.println("User " + toId + " is not online. Message dropped.");
-                // 可选: 通知发送者目标离线
+                // 通知发送者目标离线
+                notifySenderOffline(session, toId);
             }
 
         } catch (Exception e) {
@@ -88,6 +90,30 @@ public class ChatHandler extends TextWebSocketHandler {
         if (userId != null) {
             SESSIONS.remove(userId);
             System.out.println("User disconnected: " + userId);
+        }
+    }
+
+    /**
+     * 通知发送者目标用户离线
+     * @param senderSession 发送者会话
+     * @param targetId 目标用户ID
+     */
+    private void notifySenderOffline(WebSocketSession senderSession, String targetId) {
+        try {
+            MessageDTO offlineNotice = MessageDTO.builder()
+                    .type("ERROR")
+                    .fromId(targetId)
+                    .toId((String) senderSession.getAttributes().get("userId"))
+                    .content("User " + targetId + " is offline")
+                    .timestamp(System.currentTimeMillis())
+                    .build();
+            
+            String noticeJson = objectMapper.writeValueAsString(offlineNotice);
+            senderSession.sendMessage(new TextMessage(noticeJson));
+            System.out.println("Notified sender that target user " + targetId + " is offline");
+        } catch (Exception e) {
+            System.err.println("Failed to notify sender about offline target: " + e.getMessage());
+            e.printStackTrace();
         }
     }
 }
